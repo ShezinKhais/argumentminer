@@ -93,10 +93,14 @@ class FallacyDetector:
         return found
 
     def detect_unique(self, text: str) -> list[FallacyMatch]:
-        """Return one match per fallacy type (highest confidence)."""
-        all_matches = self.detect(text)
+        """Return the first match for each fallacy type found in text.
+
+        Confidence is a property of the pattern, not of the individual match, so
+        every hit on one fallacy carries the same score and there is nothing to
+        rank them by. The earlier match wins, which keeps the results in the
+        order the fallacies appear in the text.
+        """
         seen: dict[str, FallacyMatch] = {}
-        for m in all_matches:
-            if m.name not in seen or m.confidence > seen[m.name].confidence:
-                seen[m.name] = m
+        for m in self.detect(text):
+            seen.setdefault(m.name, m)
         return list(seen.values())

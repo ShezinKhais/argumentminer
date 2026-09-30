@@ -23,13 +23,24 @@ class Segment:
     end_char: int
 
 
-# signal words that help identify each segment type
+# Signal words that help identify each segment type.
+#
+# Every word here has to earn its place: a marker that also has a common
+# non-argumentative sense fires on ordinary prose and drags most of the text
+# into one bucket, which is worse than not classifying it at all.
 _CONCLUSION_SIGNALS = re.compile(
-    r'\b(therefore|thus|hence|consequently|so|as a result|in conclusion|'
-    r'it follows that|which means|this proves|this shows)\b', re.I
+    r'\b(therefore|thus|hence|consequently|as a result|in conclusion|'
+    r'it follows that|which means|this proves|this shows)\b'
+    # "so" marks a conclusion only when it opens a clause. Mid-sentence it is
+    # almost always an intensifier ("so cold"), which matched everywhere.
+    r'|(?:^|[.;,]\s*)so\b', re.I
 )
 _PREMISE_SIGNALS = re.compile(
-    r'\b(because|since|given that|as|for|in light of|considering that|'
+    # "as" and "for" are deliberately absent. Their premise sense ("as he was
+    # late", "for he was tired") is rare beside their use as ordinary
+    # prepositions, so including them classified nearly every sentence as a
+    # premise.
+    r'\b(because|since|given that|in light of|considering that|'
     r'the fact that|evidence shows|studies show|research indicates)\b', re.I
 )
 _CLAIM_SIGNALS = re.compile(
@@ -39,12 +50,20 @@ _CLAIM_SIGNALS = re.compile(
 
 
 def _split_to_clauses(text: str) -> list[tuple[str, int, int]]:
-    """Split text at sentence boundaries, returning (text, start, end) tuples."""
+    """Split text at sentence boundaries, returning (text, start, end) tuples.
+
+    The offsets bracket the stripped text exactly, so text[start:end] gives the
+    clause back. Reporting the raw match bounds alongside a stripped string put
+    every clause after the first one character early, which shifts anything that
+    highlights a segment in the source.
+    """
     parts = []
     for m in re.finditer(r'[^.!?]+[.!?]?', text):
-        part = m.group().strip()
+        raw = m.group()
+        part = raw.strip()
         if len(part) > 10:
-            parts.append((part, m.start(), m.end()))
+            start = m.start() + (len(raw) - len(raw.lstrip()))
+            parts.append((part, start, start + len(part)))
     return parts
 
 
