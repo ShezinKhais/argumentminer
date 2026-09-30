@@ -814,7 +814,7 @@ button.addEventListener("click", function () {
 
 def render_html(graph: ArgumentGraph, title: str = "Argument Graph",
                 output_path: Path = None,
-                fallacies: dict[str, list[FallacyMatch]] | None = None,
+                fallacies: dict[str, list[FallacyMatch]] | list[FallacyMatch] | None = None,
                 source: str | None = None) -> str:
     """Render a self-contained HTML report of the argument structure.
 
@@ -831,6 +831,7 @@ def render_html(graph: ArgumentGraph, title: str = "Argument Graph",
     attack  = sum(1 for e in graph.edges if e.relation == RelationType.ATTACK)
     other   = len(graph.edges) - support - attack
 
+    fallacies = _by_unit(graph, fallacies)
     matched = 0 if fallacies is None else sum(len(v) for v in fallacies.values())
 
     figures = (
@@ -882,6 +883,30 @@ def render_html(graph: ArgumentGraph, title: str = "Argument Graph",
     if output_path:
         Path(output_path).write_text(html_out, encoding="utf-8")
     return html_out
+
+
+def _by_unit(graph: ArgumentGraph,
+             fallacies) -> dict[str, list[FallacyMatch]] | None:
+    """Accept fallacies keyed by unit, or as one flat list for the whole text.
+
+    A dict says which unit each match came from, which is what lets the report
+    mark the phrase in place rather than filing it in a separate list. A flat
+    list is what a caller gets from running the detector over a whole passage
+    in one go, and it was the argument this function took first, so it is still
+    honoured: each match is attached to the first unit whose text contains the
+    phrase it matched, and to nothing at all when no unit does.
+    """
+    if fallacies is None or isinstance(fallacies, dict):
+        return fallacies
+
+    by_unit: dict[str, list[FallacyMatch]] = {}
+    for match in fallacies:
+        phrase = (match.matched_text or "").strip().lower()
+        for node in graph.nodes:
+            if phrase and phrase in node.segment.text.lower():
+                by_unit.setdefault(node.id, []).append(match)
+                break
+    return by_unit
 
 
 def _rail_data(graph: ArgumentGraph, number: dict[str, int],

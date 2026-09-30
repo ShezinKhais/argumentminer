@@ -1,5 +1,6 @@
 """Tests for segmentation offsets, signal precision, and HTML rendering."""
 
+import re
 import json
 from html import escape
 
@@ -95,7 +96,61 @@ class TestHtmlRendering:
                 "</script><img src=x onerror=alert(1)> everywhere.")
         page = render_html(build_graph(segmenter.segment(text)))
         assert "</script><img" not in page
-        assert "\\u003c/script\\u003e" in page
+        assert "<img src=x" not in page
+        # The unit text is written into the document escaped, so a closing tag
+        # inside it is inert wherever it lands.
+        assert "&lt;/script&gt;" in page
+
+    def test_page_still_carries_the_graph_data(self, segmenter):
+        text = "We must act because the evidence is overwhelming."
+        page = render_html(build_graph(segmenter.segment(text)))
+        assert "evidence is overwhelming" in page
+        # The embedded block has to be JSON the page can actually parse, which
+        # is the part that matters; how it is spelled into the document is not.
+        # It carries the rail geometry rather than the whole graph, because the
+        # unit text is rendered as readable markup and not as data.
+        payload = json.loads(self._data_block(page))
+        assert payload["units"], "the rail carried no units"
+
+    def test_the_page_needs_no_network_to_draw(self, segmenter):
+        """It used to load D3 from a CDN, so a saved report drew nothing offline."""
+        page = render_html(build_graph(segmenter.segment("We must act because it is late.")))
+        # The SVG namespace is an identifier, not an address: nothing resolves
+        # it and the page draws with it offline. Anything else would be a fetch.
+        addresses = [a for a in re.findall(r"https?://[^\"' )]*", page)
+                     if a != "http://www.w3.org/2000/svg"]
+        assert addresses == [], f"the page would fetch {addresses}"
+        assert "cdn" not in page.lower()
+        # Nothing may be fetched at view time either.
+        for fetcher in ("fetch(", "XMLHttpRequest", "importScripts", "<script src"):
+            assert fetcher not in page
+
+    def test_fallacies_reach_the_page_when_given(self, segmenter):
+        from argumentminer.fallacy import FallacyDetector
+        text = "Either we act now or we lose everything."
+        found = FallacyDetector().detect_unique(text)
+        assert found, "this passage no longer trips a detector, so the test proves nothing"
+
+        page = render_html(build_graph(segmenter.segment(text)), fallacies=found)
+        for match in found:
+            assert match.name in page
+            assert match.matched_text in page
+        # The caveat travels with them; a bare list reads as a verdict.
+        assert "not that the argument commits the fallacy" in page
+
+    def test_fallacies_may_be_given_keyed_by_unit(self, segmenter):
+        """The CLI detects per unit, so it knows which unit each match came from."""
+        from argumentminer.fallacy import FallacyDetector
+        text = "Either we act now or we lose everything."
+        graph = build_graph(segmenter.segment(text))
+        detector = FallacyDetector()
+        by_unit = {n.id: detector.detect_unique(n.segment.text) for n in graph.nodes}
+        assert any(by_unit.values()), "no unit tripped a detector"
+
+        page = render_html(graph, fallacies=by_unit)
+        for matches in by_unit.values():
+            for match in matches:
+                assert match.name in page
 
     def test_title_is_escaped(self, segmenter):
         page = render_html(build_graph(segmenter.segment("A plain sentence here.")),
@@ -108,37 +163,6 @@ class TestHtmlRendering:
         # innerHTML would parse markup inside a segment as live HTML.
         assert ".innerHTML" not in page
 
-    def test_page_still_carries_the_graph_data(self, segmenter):
-        text = "We must act because the evidence is overwhelming."
-        page = render_html(build_graph(segmenter.segment(text)))
-        assert "evidence is overwhelming" in page
-        # The embedded block has to be JSON the page can actually parse, which
-        # is the part that matters; how it is spelled into the document is not.
-        payload = json.loads(self._data_block(page))
-        assert payload["nodes"], "the graph carried no nodes"
-        assert any("evidence is overwhelming" in n["text"] for n in payload["nodes"])
-
-    def test_the_page_needs_no_network_to_draw(self, segmenter):
-        """It used to load D3 from a CDN, so a saved report drew nothing offline."""
-        page = render_html(build_graph(segmenter.segment("We must act because it is late.")))
-        assert "http://" not in page
-        assert "https://" not in page
-        assert "cdn" not in page.lower()
-        # Nothing may be fetched at view time either.
-        for fetcher in ("fetch(", "XMLHttpRequest", "importScripts", "<script src"):
-            assert fetcher not in page
-
-    def test_fallacies_reach_the_page_when_given(self, segmenter):
-        from argumentminer.fallacy import FallacyDetector
-        text = "You should agree because everyone knows this is how it works."
-        found = FallacyDetector().detect_unique(text)
-        page = render_html(build_graph(segmenter.segment(text)), fallacies=found)
-        payload = json.loads(
-            page.split('id="fallacies" type="application/json">')[1].split("</script>")[0])
-        assert len(payload) == len(found)
-        # The caveat travels with them; a bare list reads as a verdict.
-        assert "not judgements about the argument" in page
-
     @staticmethod
     def _data_block(page: str) -> str:
-        return page.split('id="data" type="application/json">')[1].split("</script>")[0]
+        return page.split('id="rail-data" type="application/json">')[1].split("</script>")[0]
