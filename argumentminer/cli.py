@@ -43,6 +43,12 @@ def mine(
     console.print("\n[bold]Argument Structure:[/bold]")
     console.print(render_text_tree(graph))
 
+    # Keyed by unit so the HTML report can mark a match on the unit it fired on
+    # rather than filing it in a list of its own.
+    unit_fallacies = None if no_fallacies else {
+        node.id: detector.detect_unique(node.segment.text) for node in graph.nodes
+    }
+
     if not no_fallacies:
         fallacies = detector.detect_unique(text)
         if fallacies:
@@ -57,7 +63,13 @@ def mine(
             console.print("[green]No obvious fallacies detected.[/green]")
 
     if html_out:
-        render_html(graph, title="ArgumentMiner Analysis", output_path=html_out)
+        render_html(
+            graph,
+            title="ArgumentMiner Analysis",
+            output_path=html_out,
+            fallacies=unit_fallacies,
+            source=str(file) if file else "text passed on the command line",
+        )
         console.print(f"HTML saved -> {html_out}")
 
     if json_out:

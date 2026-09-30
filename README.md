@@ -11,8 +11,8 @@ Built to explore how argument structure can be modelled programmatically and how
 1. Input text is split into argument units (sentences or clauses) and classified as claim, premise, or conclusion using marker phrase patterns
 2. Consecutive unit pairs are checked for support or attack relationships using a second set of patterns
 3. Eight fallacy detectors run over each unit: Ad Hominem, Appeal to Popularity, False Dichotomy, Appeal to Authority, Slippery Slope, Straw Man, Hasty Generalisation, Appeal to Emotion
-4. A directed graph is built with NetworkX (nodes = argument units, edges = relations)
-5. The graph is rendered as an interactive HTML file using Pyvis
+4. A directed graph is built from the units (nodes = argument units, edges = relations)
+5. The graph is rendered as a self-contained HTML report with no external requests
 
 ---
 
@@ -34,11 +34,23 @@ HTML graph with `--html`. `fallacies` runs only the fallacy detectors.
 
 ---
 
-## Graph legend
+## Report legend
 
-- Green edges: support relationships
-- Red edges: attack relationships
-- Red node border: fallacy detected on that unit
+The HTML report lists the units in the order they appear in the source, with a
+rail on the left that places each one in its role's lane: background, premise,
+claim, conclusion, left to right. Relations are drawn across the rail and are
+also written out in words on each unit, so nothing depends on seeing the
+drawing.
+
+- Solid line into an arrowhead: a support relation, drawn from the supporting
+  unit to the unit it supports
+- Dashed line into a crossbar: an attack relation
+- Rule at a unit's leading edge: its role
+- Dotted underline in a unit's text: the phrase a fallacy detector matched
+- Ring around a lane dot: at least one detector matched in that unit
+
+The rail is dropped on narrow screens, where the words carry the relations. The
+report fetches nothing and opens offline.
 
 ---
 
@@ -63,8 +75,8 @@ argumentminer/
 ├── argumentminer/
 │   ├── segmenter.py    # argument unit classification
 │   ├── fallacy.py      # 8 fallacy pattern detectors
-│   ├── graph.py        # support/attack relations, NetworkX graph construction
-│   ├── visualiser.py   # Pyvis HTML rendering
+│   ├── graph.py        # support/attack relations, graph construction
+│   ├── visualiser.py   # text tree and self-contained HTML report
 │   └── cli.py
 └── tests/
     └── test_fallacy.py
@@ -74,4 +86,5 @@ argumentminer/
 
 ## Stack
 
-Python 3.10, NetworkX, Pyvis, Typer, Rich
+Python 3.10, Typer, Rich. The HTML report is written by hand, with no
+charting or graph library and no runtime download.
