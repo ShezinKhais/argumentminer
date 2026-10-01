@@ -1,6 +1,6 @@
 # ArgumentMiner
 
-Analyses argumentative text - debates, opinion pieces, forum threads - and extracts the logical structure. It identifies claims, premises, and conclusions, detects support/attack relationships between them, flags logical fallacies, and renders everything as an interactive directed graph.
+Analyses argumentative text - debates, opinion pieces, forum threads - and extracts the logical structure. It identifies claims, premises and conclusions, links them into a directed graph of support relations, flags the phrasing of eight logical fallacies, and renders the result as a self-contained HTML report.
 
 Built to explore how argument structure can be modelled programmatically and how rule-based NLP compares to trained models on structured reasoning tasks.
 
@@ -9,9 +9,9 @@ Built to explore how argument structure can be modelled programmatically and how
 ## How it works
 
 1. Input text is split into argument units (sentences or clauses) and classified as claim, premise, or conclusion using marker phrase patterns
-2. Consecutive unit pairs are checked for support or attack relationships using a second set of patterns
-3. Eight fallacy detectors run over each unit: Ad Hominem, Appeal to Popularity, False Dichotomy, Appeal to Authority, Slippery Slope, Straw Man, Hasty Generalisation, Appeal to Emotion
-4. A directed graph is built from the units (nodes = argument units, edges = relations)
+2. A premise is attached as support to the most recent preceding claim, and a claim is attached as support to a conclusion that follows it. Nothing else creates a relation, so a passage with no claim has no relations at all
+3. Eight fallacy detectors run over each unit: Ad Hominem, Straw Man, Appeal to Authority, False Dichotomy, Slippery Slope, Appeal to Emotion, Circular Reasoning, Hasty Generalization
+4. A directed graph is built from the units: nodes are argument units, edges are support relations
 5. The graph is rendered as a self-contained HTML report with no external requests
 
 ---
@@ -44,7 +44,8 @@ drawing.
 
 - Solid line into an arrowhead: a support relation, drawn from the supporting
   unit to the unit it supports
-- Dashed line into a crossbar: an attack relation
+- Dashed line into a crossbar: an attack relation. The report can draw one,
+  but no rule currently emits one, so you will not see it on real input
 - Rule at a unit's leading edge: its role
 - Dotted underline in a unit's text: the phrase a fallacy detector matched
 - Ring around a lane dot: at least one detector matched in that unit
@@ -54,6 +55,31 @@ report fetches nothing and opens offline.
 
 ---
 
+## Limitations
+
+Everything here is pattern matching over surface text, and the output should
+be read as somewhere to look rather than as a verdict.
+
+- Each detector is a single marker phrase pattern. A match means the phrase
+  occurred, not that the argument commits the fallacy. Quotation, reported
+  speech and ordinary usage trip the same patterns, so expect false positives.
+  The report says so on the page as well.
+- The confidence beside a fallacy is a constant written into the detector. It
+  is identical for every match that detector ever makes, so it ranks the
+  detectors against each other and measures nothing about the passage in hand.
+- A fallacy committed without its usual phrasing is invisible. There is no
+  model behind this, only the eight patterns listed above.
+- Support is the only relation the graph builder emits. Attack is in the data
+  model and the report can draw one, but no rule creates it, so a rebuttal is
+  recorded as an unrelated unit rather than as an attack.
+- Relations are anchored on the most recent claim. A premise that supports a
+  claim made earlier than the last one is attached to the wrong claim, and a
+  passage containing no claim at all comes out with no relations.
+- Unit roles come from marker phrases too, which means a claim introduced
+  without one ("Therefore", "because", "I think") falls back to being read as
+  background.
+
+---
 ## Testing
 
 Install the dependencies and run the suite:
@@ -79,7 +105,9 @@ argumentminer/
 │   ├── visualiser.py   # text tree and self-contained HTML report
 │   └── cli.py
 └── tests/
-    └── test_fallacy.py
+    ├── test_segmenter.py  # unit classification and the HTML report
+    ├── test_fallacy.py
+    └── test_cli.py
 ```
 
 ---
